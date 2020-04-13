@@ -1,0 +1,10 @@
+name: covid-19-v2
+title:
+username:
+account: uscovid-19
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 1969506
+bundleId: 2900705
+url: https://uscovid-19.shinyapps.io/covid-19-v2/
+when: 1584678292.849

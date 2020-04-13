@@ -1,0 +1,10 @@
+name: covid-19-emerging
+title:
+username:
+account: uscovid-19
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2105295
+bundleId: 3004997
+url: https://uscovid-19.shinyapps.io/covid-19-emerging/
+when: 1586743876.20678
