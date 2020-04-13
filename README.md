@@ -2,11 +2,11 @@
 
 Files for covid-19 shiny app:
 
-covid-19/ - US
+- US: covid-19/
 
-covid-19-eu/ - Western Europe
+- Western Europe: covid-19-eu/ 
 
-covid-19-sa/ - South America
+- South America: covid-19-sa/ 
 
-covid-19-emerging/ - Countries with 'emerging' outbreaks
+- Countries with 'emerging' outbreaks: covid-19-emerging/ 
 
