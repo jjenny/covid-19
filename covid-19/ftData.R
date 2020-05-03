@@ -1,13 +1,71 @@
+fmtJhuDate = function(jhu.date) {
+  newDate = c()
+  
+  for (i in seq(1, nrow(jhu.date))) {
+    #print(i)
+    #print(length(jhu.date))
+    cur = jhu.date[i,1][[1]]
+    #print(cur)
+    cur.split = unlist(strsplit(cur, "[.]"))
+    
+    month = sub("X", "0", cur.split[1])
+    #if (length(month) == 1) {
+    #  month = paste0("0", month)
+    #}
+    
+    year = paste0("20", cur.split[3])
+    
+    day = cur.split[2]
+    if (nchar(day) == 1) {
+      day = paste0("0", day)
+    }
+    #print('HI')
+    #print(paste0(year,month,day))
+    newDate = c(newDate, paste0(year,month,day))
+    
+  }
+  t = cbind(jhu.date, newDate)
+  colnames(t) = c("jhu_date", "date")
+  return(t)
+}
+
 library(dplyr)
 library(tidyr)
 
-setwd("~/Desktop/COVID-SHINY/covid-19")
+setwd("~/Desktop/covid-19/covid-19")
 states = read.csv("daily.csv")
 intl = read.csv("intl.csv")
 capita = read.csv("capita.csv")
 
+##intl compare
+jhu.confirmed = "../data/COVID-19/csse_covid_19_data/csse_covid_19_time_series/time_series_covid19_confirmed_global.csv"
+jhu = read.csv(jhu.confirmed)
+
+jhu.Hubei = jhu[jhu[,1]=="Hubei",c(2,5:ncol(jhu))]
+jhu.Hubei$Country.Region = "Hubei"
+jhu.Italy = jhu[jhu[,2]=="Italy",c(2,5:ncol(jhu))]
+
+jhu.states = rbind(jhu.Hubei, jhu.Italy)
+jhu.states.long = pivot_longer(jhu.states, -Country.Region, names_to = "jhu_date", values_to = "positive")
+jhu_date = fmtJhuDate(unique(jhu.states.long[,2]))
+jhu.states.date = left_join(jhu.states.long, jhu_date)
+intl = select(jhu.states.date, date, state = Country.Region, positive)
+intl$date = as.integer(as.character(intl$date))
+
+##get intl positiveIncrease##
+
+positiveIncrease = c()
+for (i in 1:nrow(intl)) {
+  if (intl[i,1] == 20200122) prev = 0
+  positiveIncrease = c(positiveIncrease, intl[i,]$positive - prev)
+  prev = intl[i,]$positive
+}
+intl = cbind(intl, positiveIncrease)
+
+##add population
 states = left_join(states, capita, by="state")
 intl = left_join(intl, capita, by="state")
+
 #add index to dates
 all_dates = unique(c(states$date, intl$date))
 date_index = as.data.frame(cbind(sort(all_dates), seq(1, length(all_dates))))
@@ -16,12 +74,14 @@ colnames(date_index) = c("date", "index")
 states = left_join(states, date_index, by = "date")
 intl = left_join(intl, date_index, by = "date")
 
-s = states %>% select(date, state, positive, total, pop, index)
-i = intl %>% mutate(total = NA)  %>% select(date, state, positive,total, pop, index)
+
+s = states %>% select(date, state, positive, positiveIncrease, total, pop, index)
+i = intl %>% mutate(total = NA) %>% select(date, state, positive, positiveIncrease, total, pop, index)
 data = bind_rows(s,i)
 
 #calculate relative data
 positive.spread = select(data, date, state, positive) %>% spread(state, positive)
+
 cross500.date = apply(positive.spread[,2:ncol(positive.spread)], 2, function(x) positive.spread[,1][min(which(!is.na(x) & x>500))])
 cross500.index = date_index[as.character(cross500.date),2]
 cross500.index[is.na(cross500.index)] = max(date_index$index)
@@ -30,6 +90,39 @@ colnames(cross500) = c("state", "cross")
 cross500$cross = as.integer(as.character(cross500$cross))
 data.rel = as.data.frame(left_join(data, cross500, by="state") %>% mutate(rel = index-cross))
 
+##get average positive increase
+positiveIncrease.spread = select(data, date, state, positiveIncrease) %>% spread(state, positiveIncrease)
+positiveIncrease.avgSpread = c()
+for (i in 1:nrow(positiveIncrease.spread)) {
+  if (i < 7) {
+    cur = positiveIncrease.spread[1:i, 2:ncol(positiveIncrease.spread)]
+  } else {
+    cur = positiveIncrease.spread[i:(i-7), 2:ncol(positiveIncrease.spread)]
+  }
+  curAvg = apply(cur, 2, function(x) mean(x, na.rm=T))
+  positiveIncrease.avgSpread = rbind(positiveIncrease.avgSpread, c(positiveIncrease.spread[i,1], curAvg))
+}
+colnames(positiveIncrease.avgSpread) = colnames(positiveIncrease.spread)
+avgPosIncrease = pivot_longer(as.data.frame(positiveIncrease.avgSpread), -date, names_to = "state", values_to = "avgIncrease")
+avgPosIncrease.rel500 = left_join(left_join(avgPosIncrease, date_index), cross500)  %>% mutate(rel = index-cross)
+
+##get total test increase
+totalIncrease.spread = select(states, date, state, totalTestResultsIncrease) %>% spread(state, totalTestResultsIncrease)
+totalIncrease.avgSpread = c()
+for (i in 1:nrow(totalIncrease.spread)) {
+  if (i < 7) {
+    cur = totalIncrease.spread[1:i, 2:ncol(totalIncrease.spread)]
+  } else {
+    cur = totalIncrease.spread[i:(i-7), 2:ncol(totalIncrease.spread)]
+  }
+  curAvg = apply(cur, 2, function(x) mean(x, na.rm=T))
+  totalIncrease.avgSpread = rbind(totalIncrease.avgSpread, c(totalIncrease.spread[i,1], curAvg))
+}
+colnames(totalIncrease.avgSpread) = colnames(totalIncrease.spread)
+avgTotalIncrease = pivot_longer(as.data.frame(totalIncrease.avgSpread), -date, names_to = "state", values_to = "avgTotalIncrease")
+avgPosIncrease.total = left_join(inner_join(avgPosIncrease, avgTotalIncrease, by = c("date", "state")), date_index)
+avgPosIncrease.total$avgIncrease = as.numeric(as.character(avgPosIncrease.total$avgIncrease))
+avgPosIncrease.total$avgTotalIncrease = as.numeric(as.character(avgPosIncrease.total$avgTotalIncrease))
 ##get growth rate
 tmp = t(positive.spread[,2:ncol(positive.spread)])
 growth = rep(NA, length(tmp[,1]))
@@ -54,6 +147,8 @@ cross3 = as.data.frame(unname(cbind(names(cross3.date), cross3.index)))
 colnames(cross3) = c("state", "cross")
 cross3$cross = as.integer(as.character(cross3$cross))
 data.relCapita = as.data.frame(left_join(data, cross3, by="state") %>% mutate(rel = index-cross))
+avgPosIncrease.norm = left_join(avgPosIncrease, capita) %>% mutate(norm = avgIncrease / (pop/1000))
+avgPosIncrease.relCapita = left_join(left_join(avgPosIncrease.norm, date_index), cross3)  %>% mutate(rel = index-cross)
 
 
 
@@ -61,10 +156,10 @@ data.relCapita = as.data.frame(left_join(data, cross3, by="state") %>% mutate(re
 recent = states[states$index == max(data$index),]
 recent.ordered = recent[order(recent$positive, decreasing = T),]
 states = c()
-states$over3000 = recent.ordered[recent.ordered$positive>=3000 & !is.na(recent.ordered$positive),]$state
-states$over1000 = recent.ordered[recent.ordered$positive>=1000  & recent.ordered$positive < 3000 & !is.na(recent.ordered$positive),]$state
-states$over500 = recent.ordered[recent.ordered$positive>=500  & recent.ordered$positive < 1000 & !is.na(recent.ordered$positive),]$state
-states$over0 = recent.ordered[recent.ordered$positive<500 & !is.na(recent.ordered$positive),]$state
+states$bin1 = recent.ordered[recent.ordered$positive>=10000 & !is.na(recent.ordered$positive),]$state
+states$bin2 = recent.ordered[recent.ordered$positive>=3000  & recent.ordered$positive < 10000 & !is.na(recent.ordered$positive),]$state
+states$bin3 = recent.ordered[recent.ordered$positive>=1000  & recent.ordered$positive < 3000 & !is.na(recent.ordered$positive),]$state
+states$bin4 = recent.ordered[recent.ordered$positive<1000 & !is.na(recent.ordered$positive),]$state
 
 
 ##Make data tables
@@ -74,10 +169,11 @@ dataAbs$noNorm = data %>% mutate(plot = positive) %>% mutate(cases = plot) %>% s
 dataAbs$normByTotalCases = data %>% mutate(plot = positive/total)  %>% mutate(cases = prettyNum(plot, digits=2)) %>% select(date_label = date, date = index, state, plot, cases)
 dataAbs$normByPop = data %>% mutate(plot = positive/(pop/1000)) %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date_label = date, date = index, state, plot, cases)
 dataAbs$growth = growth.long %>% mutate(cases = prettyNum(value, digits=3)) %>% select(date_label = date, date = index, state = name, plot = value, cases) %>% as.data.frame()
+
+
 dataRel = c()
 dataRel$noNorm = data.rel %>% mutate(plot = positive) %>% mutate(cases = plot) %>% select(date = rel, state, plot, cases)
 dataRel$normByPop = data.relCapita %>% mutate(plot = positive/(pop/1000)) %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date = rel, state, plot, cases)
-
 
 ##Government response
 response_data = read.csv("response.csv")
@@ -90,6 +186,17 @@ response$rel = response.rel
 response$relCapita = response.relCapita
 
 
+dataDaily = c()
+dataDaily$abs = c()
+dataDaily$rel = c()
+
+dataDaily$abs$normByPop = avgPosIncrease.relCapita  %>% mutate(plot = norm) %>% mutate(cases = norm) %>% select(date_label = date, date = index, state, plot, cases)
+dataDaily$abs$noNorm = avgPosIncrease.rel500 %>%  mutate(plot = avgIncrease) %>% mutate(cases = avgIncrease) %>% select(date_label = date, date = index, state, plot, cases)
+dataDaily$abs$normByTotalCases = avgPosIncrease.total %>% mutate(plot = avgIncrease/avgTotalIncrease)  %>% mutate(cases = prettyNum(plot, digits=2)) %>% select(date_label = date, date = index, state, plot, cases)
+
+dataDaily$rel$normByPop = avgPosIncrease.relCapita %>% mutate(plot = norm) %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date = rel, state, plot, cases)
+dataDaily$rel$noNorm = avgPosIncrease.rel500 %>%  mutate(plot = avgIncrease) %>% mutate(cases = avgIncrease) %>% select(date = rel, state, plot, cases)
+
 
 #Save data
 saveRDS(states, file="states.RDS")
@@ -97,3 +204,4 @@ saveRDS(dataAbs, file="dataAbs.RDS")
 saveRDS(dataRel, file="dataRel.RDS")
 saveRDS(response, file="response.RDS")
 saveRDS(growth, file="growth.RDS")
+saveRDS(dataDaily, file="daily.RDS")
