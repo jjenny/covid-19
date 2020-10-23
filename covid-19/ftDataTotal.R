@@ -1,6 +1,6 @@
 library(dplyr)
 library(tidyr)
-
+setwd("~/Desktop/covid-19/covid-19")
 states = read.csv("daily.csv")
 capita = read.csv("capita.csv", row.names=1)
 capita = capita / 1000

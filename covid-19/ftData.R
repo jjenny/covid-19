@@ -1,3 +1,4 @@
+options(scipen = 999)
 fmtJhuDate = function(jhu.date) {
   newDate = c()
   
@@ -53,7 +54,6 @@ intl = select(jhu.states.date, date, state = Country.Region, positive)
 intl$date = as.integer(as.character(intl$date))
 
 ##get intl positiveIncrease##
-
 positiveIncrease = c()
 for (i in 1:nrow(intl)) {
   if (intl[i,1] == 20200122) prev = 0
@@ -123,6 +123,8 @@ avgTotalIncrease = pivot_longer(as.data.frame(totalIncrease.avgSpread), -date, n
 avgPosIncrease.total = left_join(inner_join(avgPosIncrease, avgTotalIncrease, by = c("date", "state")), date_index)
 avgPosIncrease.total$avgIncrease = as.numeric(as.character(avgPosIncrease.total$avgIncrease))
 avgPosIncrease.total$avgTotalIncrease = as.numeric(as.character(avgPosIncrease.total$avgTotalIncrease))
+
+
 ##get growth rate
 tmp = t(positive.spread[,2:ncol(positive.spread)])
 growth = rep(NA, length(tmp[,1]))
@@ -153,20 +155,34 @@ avgPosIncrease.relCapita = left_join(left_join(avgPosIncrease.norm, date_index),
 
 
 #bin states
-recent = states[states$index == max(data$index),]
-recent.ordered = recent[order(recent$positive, decreasing = T),]
-states = c()
-states$bin1 = recent.ordered[recent.ordered$positive>=10000 & !is.na(recent.ordered$positive),]$state
-states$bin2 = recent.ordered[recent.ordered$positive>=3000  & recent.ordered$positive < 10000 & !is.na(recent.ordered$positive),]$state
-states$bin3 = recent.ordered[recent.ordered$positive>=1000  & recent.ordered$positive < 3000 & !is.na(recent.ordered$positive),]$state
-states$bin4 = recent.ordered[recent.ordered$positive<1000 & !is.na(recent.ordered$positive),]$state
+recent = states[states$index == max(states$index),]
+yesterday = states[states$index == max(states$index)-1,]
+percIncrease = recent$positiveIncrease
+names(percIncrease) = recent$state
 
+recent.ordered = recent[order(recent$positive, decreasing = T),]
+q = quantile(recent.ordered$positive)
+cutoffs = c()
+for (i in seq(2,4)) {
+  cutoffs = c(cutoffs, round(q[i] / 10^floor(log10(q[i]))) * 10^floor(log10(q[i])))
+}
+write.table(cutoffs, file="cutoffs.txt", quote=F, row.names=F, col.names=F)
+
+states = c()
+states$bin1 = recent.ordered[recent.ordered$positive>=cutoffs[3] & !is.na(recent.ordered$positive),]$state
+states$bin2 = recent.ordered[recent.ordered$positive>=cutoffs[2]  & recent.ordered$positive < cutoffs[3] & !is.na(recent.ordered$positive),]$state
+states$bin3 = recent.ordered[recent.ordered$positive>=cutoffs[1]  & recent.ordered$positive < cutoffs[2] & !is.na(recent.ordered$positive),]$state
+states$bin4 = recent.ordered[recent.ordered$positive<cutoffs[1] & !is.na(recent.ordered$positive),]$state
+states$bin1growing = intersect(states$bin1,names(head(sort(percIncrease, decreasing = T), n=5)))
+states$bin2growing = intersect(states$bin2,names(head(sort(percIncrease, decreasing = T), n=5)))
+states$bin3growing = intersect(states$bin3,names(head(sort(percIncrease, decreasing = T), n=5)))
+states$bin4growing = intersect(states$bin4,names(head(sort(percIncrease, decreasing = T), n=5)))
 
 ##Make data tables
 
 dataAbs = c()
 dataAbs$noNorm = data %>% mutate(plot = positive) %>% mutate(cases = plot) %>% select(date_label = date, date = index, state, plot, cases)
-dataAbs$normByTotalCases = data %>% mutate(plot = positive/total)  %>% mutate(cases = prettyNum(plot, digits=2)) %>% select(date_label = date, date = index, state, plot, cases)
+dataAbs$normByTotalCases = data %>%  filter(index>56) %>% mutate(plot = (positive/total) * 100)  %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date_label = date, date = index, state, plot, cases)
 dataAbs$normByPop = data %>% mutate(plot = positive/(pop/1000)) %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date_label = date, date = index, state, plot, cases)
 dataAbs$growth = growth.long %>% mutate(cases = prettyNum(value, digits=3)) %>% select(date_label = date, date = index, state = name, plot = value, cases) %>% as.data.frame()
 
@@ -190,9 +206,9 @@ dataDaily = c()
 dataDaily$abs = c()
 dataDaily$rel = c()
 
-dataDaily$abs$normByPop = avgPosIncrease.relCapita  %>% mutate(plot = norm) %>% mutate(cases = norm) %>% select(date_label = date, date = index, state, plot, cases)
-dataDaily$abs$noNorm = avgPosIncrease.rel500 %>%  mutate(plot = avgIncrease) %>% mutate(cases = avgIncrease) %>% select(date_label = date, date = index, state, plot, cases)
-dataDaily$abs$normByTotalCases = avgPosIncrease.total %>% mutate(plot = avgIncrease/avgTotalIncrease)  %>% mutate(cases = prettyNum(plot, digits=2)) %>% select(date_label = date, date = index, state, plot, cases)
+dataDaily$abs$normByPop = avgPosIncrease.relCapita  %>% mutate(plot = norm) %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date_label = date, date = index, state, plot, cases)
+dataDaily$abs$noNorm = avgPosIncrease.rel500 %>%  mutate(plot = avgIncrease) %>%mutate(cases = prettyNum(plot, digits=3)) %>% select(date_label = date, date = index, state, plot, cases)
+dataDaily$abs$normByTotalCases = avgPosIncrease.total %>% filter(index>56) %>% mutate(plot = (avgIncrease/avgTotalIncrease) * 100)  %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date_label = date, date = index, state, plot, cases)
 
 dataDaily$rel$normByPop = avgPosIncrease.relCapita %>% mutate(plot = norm) %>% mutate(cases = prettyNum(plot, digits=3)) %>% select(date = rel, state, plot, cases)
 dataDaily$rel$noNorm = avgPosIncrease.rel500 %>%  mutate(plot = avgIncrease) %>% mutate(cases = avgIncrease) %>% select(date = rel, state, plot, cases)
@@ -205,3 +221,37 @@ saveRDS(dataRel, file="dataRel.RDS")
 saveRDS(response, file="response.RDS")
 saveRDS(growth, file="growth.RDS")
 saveRDS(dataDaily, file="daily.RDS")
+
+
+
+###ftDataTotal.R
+
+states = read.csv("daily.csv")
+capita = read.csv("capita.csv", row.names=1)
+capita = capita / 1000
+#add index to dates
+states = left_join(states, date_index, by = "date")
+data = states
+
+#calculate relative data
+total.spread = select(data, date, state, total) %>% spread(state, total)
+
+totalTestsPerformed = total.spread[nrow(total.spread),2:ncol(total.spread)] 
+numPerformedToday = total.spread[nrow(total.spread),2:ncol(total.spread)] - total.spread[nrow(total.spread)-1,2:ncol(total.spread)]
+
+numPerformedDaily = c()
+for (i in (nrow(total.spread)-6):(nrow(total.spread)-1)) {
+  t = total.spread[(i+1),2:ncol(total.spread)] - total.spread[i,2:ncol(total.spread)]
+  numPerformedDaily = rbind(numPerformedDaily, t)
+  
+}
+
+
+totalTestsPerformed.perCapita = totalTestsPerformed / capita[colnames(totalTestsPerformed),1]
+numPerformedToday.perCapita = numPerformedToday / capita[colnames(numPerformedToday),1]
+
+tests.table = t(rbind(numPerformedToday,totalTestsPerformed,round(totalTestsPerformed.perCapita, digits=2)))
+colnames(tests.table) = c("Tests performed today", "Total tests performed", "Total tests per capita (1,000)")
+tests.table = as.data.frame(tests.table)
+
+saveRDS(tests.table, file="tests.RDS")

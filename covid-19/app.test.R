@@ -67,15 +67,15 @@ ui <- fluidPage(
         condition = "input.norm != \"Total tests performed\"",
         checkboxGroupInput("intl", "International regions:", choices = c("Hubei", "Italy"))
       ),
-      selectizeInput("states1", "States (over 200,000 cases):", 
+      selectizeInput("states1", "States (over 70,000 cases):", 
                      states$bin1,
                      multiple=TRUE, 
                      select = states$bin1growing),
-      selectizeInput("states2", "States (over 100,000 cases):", 
+      selectizeInput("states2", "States (over 30,000 cases):", 
                      states$bin2, 
                      multiple=TRUE,
                      select = states$bin2growing),
-      selectizeInput("states3", "States (over 30,000 cases):", 
+      selectizeInput("states3", "States (over 9,000 cases):", 
                      states$bin3, 
                      multiple=TRUE,
                      select = states$bin3growing),
@@ -92,7 +92,7 @@ ui <- fluidPage(
     mainPanel(
       
       img(src='preview.png', style="display: none;"),
-p("Updated 21-Oct-2020 09:14"),
+p("Updated 11-Jul-2020 (11:21)"),
       tabsetPanel(type = "tabs",
         tabPanel("Cases (cumulative)", 
           br(),

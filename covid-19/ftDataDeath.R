@@ -2,7 +2,7 @@ library(dplyr)
 library(tidyr)
 
 
-states = read.csv("states-daily.csv")
+states = read.csv("daily.csv")
 intl = read.csv("intl.csv")
 capita = read.csv("capita.csv")
 
